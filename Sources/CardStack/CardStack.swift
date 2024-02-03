@@ -7,7 +7,7 @@ import SwiftUI
 public struct CardStack<Data, Content>: View where Data: RandomAccessCollection, Data.Element: Identifiable, Content: View {
     @State private var currentIndex: Double = 0.0
     @State private var previousIndex: Double = 0.0
-    
+    private var wrapEnabled: Bool?
     private let data: Data
     @ViewBuilder private let content: (Data.Element) -> Content
     @Binding var finalCurrentIndex: Int
@@ -16,11 +16,13 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
     /// - Parameters:
     ///   - data: The identifiable data for computing the list.
     ///   - currentIndex: The index of the topmost card in the stack
+    ///   - wrapEnabled: Turns  infinite scrolling behavior on or off (default behavior is off).
     ///   - content: A view builder that creates the view for a single card
-    public init(_ data: Data, currentIndex: Binding<Int> = .constant(0), @ViewBuilder content: @escaping (Data.Element) -> Content) {
+    public init(_ data: Data, currentIndex: Binding<Int> = .constant(0), wrapEnabled: Bool? = nil, @ViewBuilder content: @escaping (Data.Element) -> Content) {
         self.data = data
         self.content = content
         _finalCurrentIndex = currentIndex
+        self.wrapEnabled = wrapEnabled
     }
     
     public var body: some View {
@@ -65,16 +67,36 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
         }
     }
     
+//    private func goTo(_ index: Double) {
+//        let maxIndex = Double(data.count - 1)
+//        if index < 0 {
+//            self.currentIndex = 0
+//        } else if index > maxIndex {
+//            self.currentIndex = maxIndex
+//        } else {
+//            self.currentIndex = index
+//        }
+//        self.finalCurrentIndex = Int(self.currentIndex)
+//    }
+    
     private func goTo(_ index: Double) {
-        let maxIndex = Double(data.count - 1)
-        if index < 0 {
-            self.currentIndex = 0
-        } else if index > maxIndex {
-            self.currentIndex = maxIndex
-        } else {
-            self.currentIndex = index
+        if wrapEnabled == true {
+            let itemCount = Double(data.count)
+            let wrappedIndex = (index.truncatingRemainder(dividingBy: itemCount) + itemCount).truncatingRemainder(dividingBy: itemCount)
+            self.currentIndex = wrappedIndex
+            self.finalCurrentIndex = Int(wrappedIndex)
         }
-        self.finalCurrentIndex = Int(self.currentIndex)
+        else {
+            let maxIndex = Double(data.count - 1)
+            if index < 0 {
+                self.currentIndex = 0
+            } else if index > maxIndex {
+                self.currentIndex = maxIndex
+            } else {
+                self.currentIndex = index
+            }
+            self.finalCurrentIndex = Int(self.currentIndex)
+        }
     }
     
     private func zIndex(for index: Int) -> Double {
@@ -138,7 +160,7 @@ struct CardStackView_Previews: PreviewProvider {
             ]
             
             VStack {
-                CardStack(colors, currentIndex: $currentIndex) { namedColor in
+                CardStack(colors, currentIndex: $currentIndex, wrapEnabled: true) { namedColor in
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(namedColor.color)
                         .overlay(
@@ -170,4 +192,3 @@ struct CardStackView_Previews: PreviewProvider {
     }
 
 }
-
