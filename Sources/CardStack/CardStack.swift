@@ -36,6 +36,10 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
             }
         }
         .highPriorityGesture(dragGesture)
+        .onAppear {
+            self.currentIndex = Double(finalCurrentIndex)
+            self.previousIndex = currentIndex
+        }
     }
     
     private var dragGesture: some Gesture {
@@ -66,18 +70,6 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
             }
         }
     }
-    
-//    private func goTo(_ index: Double) {
-//        let maxIndex = Double(data.count - 1)
-//        if index < 0 {
-//            self.currentIndex = 0
-//        } else if index > maxIndex {
-//            self.currentIndex = maxIndex
-//        } else {
-//            self.currentIndex = index
-//        }
-//        self.finalCurrentIndex = Int(self.currentIndex)
-//    }
     
     private func goTo(_ index: Double) {
         if wrapEnabled == true {
