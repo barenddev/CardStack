@@ -7,7 +7,13 @@ import SwiftUI
 public struct CardStack<Data, Content>: View where Data: RandomAccessCollection, Data.Element: Identifiable, Content: View {
     @State private var currentIndex: Double = 0.0
     @State private var previousIndex: Double = 0.0
+    @State private var isScrolling: Bool = false
     private var wrapEnabled: Bool?
+    private var highlightEnabled: Bool? // New variable to determine if highlighting should be enabled
+    private var highlightCornerRadius: CGFloat = 10
+    private var highlightColor: Color = .gray
+    private var highlightStrokeWidth: CGFloat = 4
+    private var highlightBlurRadius: CGFloat = 3
     private let data: Data
     @ViewBuilder private let content: (Data.Element) -> Content
     @Binding var finalCurrentIndex: Int
@@ -17,12 +23,23 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
     ///   - data: The identifiable data for computing the list.
     ///   - currentIndex: The index of the topmost card in the stack
     ///   - wrapEnabled: Turns  infinite scrolling behavior on or off (default behavior is off).
+    ///   - highlightEnabled: Applies a highlight around the currently selected card
+    ///   - highlightCornerRadius: Adjusts the corner radius of the highlight
+    ///   - highlightColor: Adjusts the color of the highlight
+    ///   - highlightStrokeWidth: Adjusts the width of the highlight
+    ///   - highlightBlurRadius: Adjusts the blur of the highlight
     ///   - content: A view builder that creates the view for a single card
-    public init(_ data: Data, currentIndex: Binding<Int> = .constant(0), wrapEnabled: Bool? = nil, @ViewBuilder content: @escaping (Data.Element) -> Content) {
+    
+    public init(_ data: Data, currentIndex: Binding<Int> = .constant(0), wrapEnabled: Bool? = nil, highlightEnabled: Bool? = nil, cardCornerRadius: CGFloat = 10, highlightColor: Color = .gray, highlightStrokeWidth: CGFloat = 4, highlightBlurRadius: CGFloat = 3, @ViewBuilder content: @escaping (Data.Element) -> Content) {
         self.data = data
         self.content = content
         _finalCurrentIndex = currentIndex
         self.wrapEnabled = wrapEnabled
+        self.highlightEnabled = highlightEnabled // Initialize with the passed value
+        self.cardCornerRadius = cardCornerRadius
+        self.highlightColor = highlightColor
+        self.highlightStrokeWidth = highlightStrokeWidth
+        self.highlightBlurRadius = highlightBlurRadius
     }
     
     public var body: some View {
@@ -33,26 +50,40 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
                     .offset(x: xOffset(for: index), y: 0)
                     .scaleEffect(scale(for: index), anchor: .center)
                     .rotationEffect(.degrees(rotationDegrees(for: index)))
+                    .background(
+                        Group {
+                            if highlightEnabled == true && !isScrolling && index == Int(round(currentIndex)) {
+                                RoundedRectangle(cornerRadius: highlightCornerRadius) // Adjust the cornerRadius as needed
+                                    .stroke(isScrolling ? Color.clear : highlightColor, lineWidth: highlightStrokeWidth).blur(radius: highlightBlurRadius)
+                                    .opacity(index == Int(round(currentIndex)) ? 1 : 0) // Applies the highlight to the topmost card and only if 'isScrolling' is false
+                            }
+                        }
+                    )
             }
         }
         .highPriorityGesture(dragGesture)
-        .onAppear {
-            self.currentIndex = Double(finalCurrentIndex)
-            self.previousIndex = currentIndex
-        }
     }
     
     private var dragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
                 withAnimation(.interactiveSpring()) {
+                    isScrolling = true // User started scrolling
                     let x = (value.translation.width / 300) - previousIndex
                     self.currentIndex = -x
                 }
             }
             .onEnded { value in
-                self.snapToNearestAbsoluteIndex(value.predictedEndTranslation)
-                self.previousIndex = self.currentIndex
+                withAnimation(.interpolatingSpring(stiffness: 300, damping: 40)) {
+                    isScrolling = false // Scrolling has stopped
+                    self.snapToNearestAbsoluteIndex(value.predictedEndTranslation)
+                    self.previousIndex = self.currentIndex
+                    
+                    // Snap the index and then wait to allow the animation to finish before resetting the scrolling state
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        isScrolling = false
+                    }
+                }
             }
     }
     
