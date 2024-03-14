@@ -61,6 +61,10 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
                     )
             }
         }
+        .onAppear {
+            self.currentIndex = Double(finalCurrentIndex)
+            self.previousIndex = currentIndex
+        }
         .highPriorityGesture(dragGesture)
     }
     
