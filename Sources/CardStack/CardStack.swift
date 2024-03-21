@@ -30,13 +30,13 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
     ///   - highlightBlurRadius: Adjusts the blur of the highlight
     ///   - content: A view builder that creates the view for a single card
     
-    public init(_ data: Data, currentIndex: Binding<Int> = .constant(0), wrapEnabled: Bool? = nil, highlightEnabled: Bool? = nil, cardCornerRadius: CGFloat = 10, highlightColor: Color = .gray, highlightStrokeWidth: CGFloat = 4, highlightBlurRadius: CGFloat = 3, @ViewBuilder content: @escaping (Data.Element) -> Content) {
+    public init(_ data: Data, currentIndex: Binding<Int> = .constant(0), wrapEnabled: Bool? = nil, highlightEnabled: Bool? = nil, highlighCornerRadius: CGFloat = 10, highlightColor: Color = .gray, highlightStrokeWidth: CGFloat = 4, highlightBlurRadius: CGFloat = 3, @ViewBuilder content: @escaping (Data.Element) -> Content) {
         self.data = data
         self.content = content
         _finalCurrentIndex = currentIndex
         self.wrapEnabled = wrapEnabled
         self.highlightEnabled = highlightEnabled // Initialize with the passed value
-        self.cardCornerRadius = cardCornerRadius
+        self.highlightCornerRadius = highlighCornerRadius
         self.highlightColor = highlightColor
         self.highlightStrokeWidth = highlightStrokeWidth
         self.highlightBlurRadius = highlightBlurRadius
