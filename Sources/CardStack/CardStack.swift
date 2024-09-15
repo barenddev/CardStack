@@ -71,6 +71,8 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
     private var dragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
+                let generator = UISelectionFeedbackGenerator()
+                generator.selectionChanged()
                 withAnimation(.interactiveSpring()) {
                     isScrolling = true // User started scrolling
                     let x = (value.translation.width / 300) - previousIndex
