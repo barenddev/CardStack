@@ -5,42 +5,68 @@ import SwiftUI
  */
 
 public struct CardStack<Data, Content>: View where Data: RandomAccessCollection, Data.Element: Identifiable, Content: View {
+    // MARK: - Properties
+    
+    // Internal State
     @State private var currentIndex: Double = 0.0
     @State private var previousIndex: Double = 0.0
     @State private var isScrolling: Bool = false
+    
+    // Configuration
     private var wrapEnabled: Bool?
-    private var highlightEnabled: Bool? // New variable to determine if highlighting should be enabled
+    private var highlightEnabled: Bool?
     private var highlightCornerRadius: CGFloat = 10
     private var highlightColor: Color = .gray
     private var highlightStrokeWidth: CGFloat = 4
     private var highlightBlurRadius: CGFloat = 3
+    
+    // Data & Content
     private let data: Data
     @ViewBuilder private let content: (Data.Element) -> Content
     @Binding var finalCurrentIndex: Int
+    
+    // Callbacks
+    private let onLongPress: ((Data.Element) -> Void)? // <<< NEW: The callback for the long press action
+
+    // MARK: - Initializer
     
     /// Creates a stack with the given content
     /// - Parameters:
     ///   - data: The identifiable data for computing the list.
     ///   - currentIndex: The index of the topmost card in the stack
-    ///   - wrapEnabled: Turns  infinite scrolling behavior on or off (default behavior is off).
+    ///   - wrapEnabled: Turns infinite scrolling behavior on or off (default behavior is off).
     ///   - highlightEnabled: Applies a highlight around the currently selected card
     ///   - highlightCornerRadius: Adjusts the corner radius of the highlight
     ///   - highlightColor: Adjusts the color of the highlight
     ///   - highlightStrokeWidth: Adjusts the width of the highlight
     ///   - highlightBlurRadius: Adjusts the blur of the highlight
+    ///   - onLongPress: A closure to execute when a card is long-pressed. It receives the data element of the pressed card.
     ///   - content: A view builder that creates the view for a single card
-    
-    public init(_ data: Data, currentIndex: Binding<Int> = .constant(0), wrapEnabled: Bool? = nil, highlightEnabled: Bool? = nil, highlighCornerRadius: CGFloat = 10, highlightColor: Color = .gray, highlightStrokeWidth: CGFloat = 4, highlightBlurRadius: CGFloat = 3, @ViewBuilder content: @escaping (Data.Element) -> Content) {
+    public init(
+        _ data: Data,
+        currentIndex: Binding<Int> = .constant(0),
+        wrapEnabled: Bool? = nil,
+        highlightEnabled: Bool? = nil,
+        highlighCornerRadius: CGFloat = 10,
+        highlightColor: Color = .gray,
+        highlightStrokeWidth: CGFloat = 4,
+        highlightBlurRadius: CGFloat = 3,
+        onLongPress: ((Data.Element) -> Void)? = nil,
+        @ViewBuilder content: @escaping (Data.Element) -> Content
+    ) {
         self.data = data
         self.content = content
         _finalCurrentIndex = currentIndex
         self.wrapEnabled = wrapEnabled
-        self.highlightEnabled = highlightEnabled // Initialize with the passed value
+        self.highlightEnabled = highlightEnabled
         self.highlightCornerRadius = highlighCornerRadius
         self.highlightColor = highlightColor
         self.highlightStrokeWidth = highlightStrokeWidth
         self.highlightBlurRadius = highlightBlurRadius
+        self.onLongPress = onLongPress
     }
+    
+    // MARK: - Body
     
     public var body: some View {
         ZStack {
@@ -53,9 +79,10 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
                     .background(
                         Group {
                             if highlightEnabled == true && !isScrolling && index == Int(round(currentIndex)) {
-                                RoundedRectangle(cornerRadius: highlightCornerRadius) // Adjust the cornerRadius as needed
-                                    .stroke(isScrolling ? Color.clear : highlightColor, lineWidth: highlightStrokeWidth).blur(radius: highlightBlurRadius)
-                                    .opacity(index == Int(round(currentIndex)) ? 1 : 0) // Applies the highlight to the topmost card and only if 'isScrolling' is false
+                                RoundedRectangle(cornerRadius: highlightCornerRadius)
+                                    .stroke(isScrolling ? Color.clear : highlightColor, lineWidth: highlightStrokeWidth)
+                                    .blur(radius: highlightBlurRadius)
+                                    .opacity(index == Int(round(currentIndex)) ? 1 : 0)
                             }
                         }
                     )
@@ -65,11 +92,14 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
             self.currentIndex = Double(finalCurrentIndex)
             self.previousIndex = currentIndex
         }
-        .highPriorityGesture(dragGesture)
+        .gesture(cardGesture)
     }
     
-    private var dragGesture: some Gesture {
-        DragGesture()
+    // MARK: - Gestures
+    private var cardGesture: some Gesture {
+        let longPress = LongPressGesture(minimumDuration: 0.5)
+        
+        let drag = DragGesture()
             .onChanged { value in
                 withAnimation(.interactiveSpring()) {
                     isScrolling = true // User started scrolling
@@ -77,21 +107,47 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
                     self.currentIndex = -x
                 }
             }
+
+        return longPress.exclusively(before: drag)
             .onEnded { value in
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
-                withAnimation(.interpolatingSpring(stiffness: 300, damping: 40)) {
-                    isScrolling = false // Scrolling has stopped
-                    self.snapToNearestAbsoluteIndex(value.predictedEndTranslation)
-                    self.previousIndex = self.currentIndex
-                    
-                    // Snap the index and then wait to allow the animation to finish before resetting the scrolling state
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        isScrolling = false
-                    }
+                switch value {
+                case .first:
+                    handleLongPress()
+                case .second(let dragValue):
+                    handleDragEnd(dragValue)
                 }
             }
     }
+    
+    private func handleLongPress() {
+        guard let onLongPress = onLongPress else { return }
+
+        let topCardIndex = Int(round(currentIndex))
+        
+        if topCardIndex >= 0 && topCardIndex < data.count {
+            let elementIndex = data.index(data.startIndex, offsetBy: topCardIndex)
+            let element = data[elementIndex]
+            onLongPress(element)
+        }
+    }
+    
+    private func handleDragEnd(_ value: DragGesture.Value) {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+        
+        withAnimation(.interpolatingSpring(stiffness: 300, damping: 40)) {
+            isScrolling = false // Scrolling has stopped
+            self.snapToNearestAbsoluteIndex(value.predictedEndTranslation)
+            self.previousIndex = self.currentIndex
+            
+            // Snap the index and then wait to allow the animation to finish before resetting the scrolling state
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isScrolling = false
+            }
+        }
+    }
+    
+    // MARK: - Helper Functions (No changes below this line)
     
     private func snapToNearestAbsoluteIndex(_ predictedEndTranslation: CGSize) {
         withAnimation(.interpolatingSpring(stiffness: 300, damping: 40)) {
@@ -114,8 +170,7 @@ public struct CardStack<Data, Content>: View where Data: RandomAccessCollection,
             let wrappedIndex = (index.truncatingRemainder(dividingBy: itemCount) + itemCount).truncatingRemainder(dividingBy: itemCount)
             self.currentIndex = wrappedIndex
             self.finalCurrentIndex = Int(wrappedIndex)
-        }
-        else {
+        } else {
             let maxIndex = Double(data.count - 1)
             if index < 0 {
                 self.currentIndex = 0
@@ -189,7 +244,9 @@ struct CardStackView_Previews: PreviewProvider {
             ]
             
             VStack {
-                CardStack(colors, currentIndex: $currentIndex, wrapEnabled: true) { namedColor in
+                CardStack(colors, currentIndex: $currentIndex, wrapEnabled: true, onLongPress: { item in
+                    print(item)
+                }) { namedColor in
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(namedColor.color)
                         .overlay(
